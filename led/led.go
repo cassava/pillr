@@ -1,4 +1,4 @@
-package main
+package led
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ type LED struct {
 	stop  chan struct{}
 }
 
-func NewLED(pin int) *LED {
+func New(pin int) *LED {
 	p, err := embd.NewDigitalPin(pin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error instantiating pin %v: %s\n", pin, err)
@@ -57,6 +57,10 @@ func (l *LED) Sustain(t time.Duration) {
 }
 
 func (l *LED) Blink(pattern ...time.Duration) {
+	if len(pattern) == 0 {
+		return
+	}
+
 	l.Stop()
 	go func() {
 		l.blink = true
