@@ -30,12 +30,10 @@ func main() {
 	panicIf(embd.InitGPIO())
 	defer embd.CloseGPIO()
 
-	fmt.Println("Creating new red LED.")
-	red := led.New(*pinnr)
-
+	l := led.New(*pinnr)
 	if flag.NArg() <= 0 {
 		fmt.Println("Blinking Heartbeat1000 pattern till you quit...")
-		red.Blink(led.Heartbeat1000...)
+		l.Blink(led.Heartbeat1000...)
 	} else {
 		pattern := make([]time.Duration, flag.NArg())
 		for i, s := range flag.Args() {
@@ -48,7 +46,7 @@ func main() {
 		}
 
 		fmt.Printf("Blinking your pattern %v till you quit...\n", pattern)
-		red.Blink(pattern...)
+		l.Blink(pattern...)
 	}
 
 	c := make(chan os.Signal, 1)
@@ -57,10 +55,10 @@ func main() {
 
 	fmt.Println("\nBye-bye.")
 	go func() {
-		// This we do in case red.Stop() doesn't work.
+		// This we do in case l.Stop() doesn't work.
 		// It's a way to force quit.
 		<-c
 		os.Exit(1)
 	}()
-	red.Stop()
+	l.Stop()
 }
