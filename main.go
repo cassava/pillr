@@ -1,9 +1,13 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
+	"os/signal"
 	"time"
 
+	"github.com/cassava/pillr/led"
 	"github.com/kidoman/embd"
 	_ "github.com/kidoman/embd/host/rpi"
 )
@@ -15,21 +19,48 @@ func panicIf(err error) {
 }
 
 func main() {
+	pinnr := flag.Int("pin", -1, "gpio pin number of LED")
+	flag.Parse()
+
+	if *pinnr < 0 {
+		fmt.Println("Please specify pin which LED is on! Be careful!")
+		os.Exit(1)
+	}
+
 	panicIf(embd.InitGPIO())
 	defer embd.CloseGPIO()
 
 	fmt.Println("Creating new red LED.")
-	red := NewLED(17)
+	red := led.New(*pinnr)
 
-	fmt.Println("Blinking pattern one for 10 seconds...")
-	red.Blink(100*time.Millisecond, 1000*time.Millisecond)
-	time.Sleep(10 * time.Second)
+	if flag.NArg() <= 0 {
+		fmt.Println("Blinking Heartbeat1000 pattern till you quit...")
+		red.Blink(led.Heartbeat1000...)
+	} else {
+		pattern := make([]time.Duration, flag.NArg())
+		for i, s := range flag.Args() {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				fmt.Println("Error parsing duration:", err)
+				os.Exit(1)
+			}
+			pattern[i] = d
+		}
 
-	fmt.Println("Blinking pattern two for 10 seconds...")
-	red.Blink(500 * time.Millisecond)
-	time.Sleep(10 * time.Second)
+		fmt.Printf("Blinking your pattern %v till you quit...\n", pattern)
+		red.Blink(pattern...)
+	}
 
-	fmt.Println("Done.")
-	red.Stop()
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	<-c
+
+	fmt.Println("\nBye-bye.")
+	go func() {
+		// This we do in case red.Stop() doesn't work.
+		// It's a way to force quit.
+		<-c
+		os.Exit(1)
+	}()
 	red.Stop()
 }
