@@ -1,4 +1,8 @@
-package main
+// Copyright (c) 2015, Ben Morgan. All rights reserved.
+// Use of this source code is governed by an MIT license
+// that can be found in the LICENSE file.
+
+package guitar
 
 var Larrivee = Levels{
 	Gradient: []float64{10, 20, 25, 35, 42, 55, 70, 85, 90, 100},
