@@ -15,8 +15,27 @@ const (
 	Extreme                // Notify after 3 minutes
 )
 
+func (d Danger) String() string {
+	switch d {
+	case Low:
+		return "low"
+	case Moderate:
+		return "moderate"
+	case Elevated:
+		return "elevated"
+	case High:
+		return "HIGH"
+	case Severe:
+		return "SEVERE"
+	case Extreme:
+		return "EXTREME"
+	default:
+		return "n/a"
+	}
+}
+
 type Levels struct {
-	Gradient []float64
+	Gradient []float32
 	Risk     []Danger
 	Details  *Notification
 }
@@ -28,7 +47,7 @@ type Notification struct {
 	LongEffects  []string
 }
 
-func (l Levels) Threat(v float64) Danger {
+func (l Levels) Threat(v float32) Danger {
 	for i, g := range l.Gradient {
 		if v < g {
 			return l.Risk[i]

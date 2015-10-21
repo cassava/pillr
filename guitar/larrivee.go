@@ -5,7 +5,7 @@
 package guitar
 
 var Larrivee = Levels{
-	Gradient: []float64{10, 20, 25, 35, 42, 55, 70, 85, 90, 100},
+	Gradient: []float32{10, 20, 25, 35, 42, 55, 70, 85, 90, 100},
 	Risk:     []Danger{Extreme, Severe, High, Elevated, Moderate, Low, Moderate, Elevated, High, Severe},
 	Details: &Notification{
 		SubjectTmpl: `Your guitar is in {{.Risk}} danger!`,

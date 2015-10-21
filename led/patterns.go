@@ -13,6 +13,7 @@ var (
 
 	FastBlink = []time.Duration{100 * time.Millisecond}
 
+	Moderate = []time.Duration{500 * time.Millisecond, 5000 * time.Millisecond}
 	Elevated = []time.Duration{100 * time.Millisecond, 1000 * time.Millisecond}
 	High     = []time.Duration{50 * time.Millisecond, 500 * time.Millisecond}
 	Severe   = []time.Duration{50 * time.Millisecond, 250 * time.Millisecond}
