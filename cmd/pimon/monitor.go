@@ -30,7 +30,7 @@ func (x Measurement) String() string {
 
 func (x Measurement) CSV() string {
 	t := time.Unix(x.UnixTime, 0).Format("2006-01-02,15:04:05")
-	return fmt.Sprintf("%v,%.2f,%.2f", t, x.Temperature, x.Humidity)
+	return fmt.Sprintf("%v,%.1f,%.1f", t, x.Temperature, x.Humidity)
 }
 
 // One days worth of measurements should take up about 1,382,400 bytes.
@@ -67,7 +67,7 @@ func NewMonitor(file string, lag float32) (*Monitor, error) {
 		}
 
 		m.Writer = bufio.NewWriter(m.file)
-		m.Writer.WriteString("time,temperature,humidity\n")
+		m.Writer.WriteString("date,time,temperature,humidity\n")
 	}
 	return m, nil
 }
