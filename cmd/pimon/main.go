@@ -69,7 +69,7 @@ func (nl *NotifyLED) Update(d guitar.Danger) {
 
 	switch d {
 	case guitar.Low:
-		nl.LED.Off()
+		nl.LED.Stop()
 	case guitar.Moderate:
 		nl.LED.Blink(led.Moderate...)
 	case guitar.Elevated:
