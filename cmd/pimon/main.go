@@ -19,6 +19,8 @@ import (
 )
 
 var (
+	// If conserve is true, we should (can) set interval to 0.
+	conserve = flag.Bool("conserve", true, "only store entries that differ from the previous")
 	pinnr    = flag.Int("led", -1, "gpio pin number of LED")
 	dhtnr    = flag.Int("dht", -1, "gpio pin number of DHT22 sensor")
 	mondb    = flag.String("output", "pimon.csv", "file to write data to")

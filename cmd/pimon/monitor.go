@@ -29,8 +29,12 @@ func (x Measurement) String() string {
 }
 
 func (x Measurement) CSV() string {
-	t := time.Unix(x.UnixTime, 0).Format("2006-01-02,15:04:05")
+	t := time.Unix(x.UnixTime, 0).Format("2006-01-02 15:04:05")
 	return fmt.Sprintf("%v,%.1f,%.1f", t, x.Temperature, x.Humidity)
+}
+
+func (x Measurement) Same(y Measurement) bool {
+	return x.Temperature == y.Temperature && x.Humidity == y.Humidity
 }
 
 // One days worth of measurements should take up about 1,382,400 bytes.
@@ -41,9 +45,8 @@ func (x Measurement) CSV() string {
 // do that from the start.
 type Series []Measurement
 
-func (s *Series) Add(m Measurement) {
-	*s = append(*s, m)
-}
+func (s *Series) Add(m Measurement) { *s = append(*s, m) }
+func (s *Series) Top() Measurement  { return (*s)[len(*s)-1] }
 
 type Monitor struct {
 	Belief Measurement
@@ -74,6 +77,10 @@ func NewMonitor(file string, lag float32) (*Monitor, error) {
 
 func (m *Monitor) Update(x Measurement) {
 	m.Belief.Update(m.lag, x)
+	if *conserve && m.Series.Top().Same(x) {
+		return
+	}
+
 	m.Series.Add(x)
 	if m.Writer != nil {
 		m.Writer.WriteString(x.CSV())

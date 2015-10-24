@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <sched.h>
 #include <time.h>
+#include <unistd.h>
 
 // GPIO direction: receive either output data to specific GPIO pin.
 #define IN  0
