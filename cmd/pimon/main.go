@@ -30,8 +30,8 @@ var (
 func listen(pin int, ch chan<- Measurement, done <-chan struct{}) {
 	read := func() (m Measurement) {
 		before := time.Now()
-		after := time.Now()
-		for after.Sub(before) < *interval {
+		after := before
+		for after.Sub(before) <= *interval {
 			t, h, r, err := dht.ReadDHTxxWithRetry(dht.DHT22, pin, false, 10)
 			if err != nil {
 				log.WithFields(log.Fields{"retries": r}).Errorf("DHT22: %s", err)
@@ -95,6 +95,9 @@ func main() {
 	}
 	if *dhtnr < 0 {
 		log.Fatal("DHT22 pin unspecified")
+	}
+	if *interval < 0 {
+		*interval = 0
 	}
 
 	exitIf(embd.InitGPIO())

@@ -46,7 +46,8 @@ func (x Measurement) Same(y Measurement) bool {
 type Series []Measurement
 
 func (s *Series) Add(m Measurement) { *s = append(*s, m) }
-func (s *Series) Top() Measurement  { return (*s)[len(*s)-1] }
+func (s *Series) Len() int          { return len(*s) }
+func (s *Series) Top() Measurement  { return (*s)[s.Len()-1] }
 
 type Monitor struct {
 	Belief Measurement
@@ -77,7 +78,7 @@ func NewMonitor(file string, lag float32) (*Monitor, error) {
 
 func (m *Monitor) Update(x Measurement) {
 	m.Belief.Update(m.lag, x)
-	if *conserve && m.Series.Top().Same(x) {
+	if *conserve && m.Series.Len() != 0 && m.Series.Top().Same(x) {
 		return
 	}
 
