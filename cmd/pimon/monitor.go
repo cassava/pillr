@@ -4,93 +4,56 @@
 
 package main
 
-import (
-	"bufio"
-	"fmt"
-	"os"
-	"time"
-)
-
-type Measurement struct {
-	UnixTime    int64
-	Temperature float32
-	Humidity    float32
-}
-
-func (x *Measurement) Update(lag float32, m Measurement) {
-	x.UnixTime = m.UnixTime
-	x.Temperature = (1-lag)*x.Temperature + lag*m.Temperature
-	x.Humidity = (1-lag)*x.Humidity + lag*m.Humidity
-}
-
-func (x Measurement) String() string {
-	t := time.Unix(x.UnixTime, 0).Format(time.Stamp)
-	return fmt.Sprintf("%v: %.1f \u2103C at %.1f%% humidity", t, x.Temperature, x.Humidity)
-}
-
-func (x Measurement) CSV() string {
-	t := time.Unix(x.UnixTime, 0).Format("2006-01-02 15:04:05")
-	return fmt.Sprintf("%v,%.1f,%.1f", t, x.Temperature, x.Humidity)
-}
-
-func (x Measurement) Same(y Measurement) bool {
-	return x.Temperature == y.Temperature && x.Humidity == y.Humidity
-}
-
-// One days worth of measurements should take up about 1,382,400 bytes.
-// This means we should have no problem storing a week of measurements.
-// After that, we simplify the measurements, so we have once every minute.
-// And after that, we can simplify further, averaging the hours. Eventually,
-// we'll resort to using a database instead of this here. Probably should
-// do that from the start.
-type Series []Measurement
-
-func (s *Series) Add(m Measurement) { *s = append(*s, m) }
-func (s *Series) Top() Measurement  { return (*s)[len(*s)-1] }
+import "sync"
 
 type Monitor struct {
-	Belief Measurement
-	Series Series
-	Writer *bufio.Writer
+	*sync.RWMutex
 
-	lag  float32
-	file *os.File
+	belief Measurement
+	series Series
+	p      Persister
+	lag    float32
 }
 
-func NewMonitor(file string, lag float32) (*Monitor, error) {
-	m := &Monitor{
-		lag: lag,
-	}
+func NewMonitor(p Persister, lag float32) (*Monitor, error) {
+	return &Monitor{
+		RWMutex: &sync.RWMutex{},
+		lag:     lag,
+		p:       p,
+	}, nil
+}
 
-	if file != "" {
-		var err error
-		m.file, err = os.Create(file)
-		if err != nil {
-			return nil, err
-		}
+func (m *Monitor) Belief() Measurement {
+	m.RLock()
+	defer m.RUnlock()
+	return m.belief
+}
 
-		m.Writer = bufio.NewWriter(m.file)
-		m.Writer.WriteString("date,time,temperature,humidity\n")
-	}
-	return m, nil
+func (m *Monitor) Series() Series {
+	m.RLock()
+	defer m.RUnlock()
+	return m.series
 }
 
 func (m *Monitor) Update(x Measurement) {
-	m.Belief.Update(m.lag, x)
-	if *conserve && m.Series.Top().Same(x) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.belief.Update(m.lag, x)
+	if Conf.Conserve && m.series.Top().Same(x) {
 		return
 	}
 
-	m.Series.Add(x)
-	if m.Writer != nil {
-		m.Writer.WriteString(x.CSV())
-		m.Writer.WriteRune('\n')
+	m.series.Add(x)
+	if m.p != nil {
+		m.p.Persist(x)
 	}
 }
 
 func (m *Monitor) Close() {
-	if m.Writer != nil {
-		m.Writer.Flush()
-		m.file.Close()
+	if m.p != nil {
+		m.Lock()
+		defer m.Unlock()
+		m.p.Close()
 	}
 }
