@@ -78,7 +78,7 @@ func Run() {
 	nl := &WarningLED{led.New(Conf.PinWarningLED), guitar.Low}
 	csv, err := NewCSVPersister(xdg.UserData(databaseSuffix))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("error persisting: ", err)
 	}
 	m, _ := NewMonitor(csv, 0.1)
 	g := guitar.Larrivee
