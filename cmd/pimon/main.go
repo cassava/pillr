@@ -131,7 +131,7 @@ func pimonInit() {
 	pf.DurationVarP(&Conf.Interval, "interval", "i", Conf.Interval, "minimum time between measurements")
 	pf.IntVarP(&Conf.PinWarningLED, "pin-warning", "W", Conf.PinWarningLED, "pin number for warning LED")
 	pf.IntVarP(&Conf.PinHeartbeatLED, "pin-heartbeat", "H", Conf.PinHeartbeatLED, "pin number for system LED")
-	pf.IntVarP(&Conf.PinSensor, "pin-warning", "S", Conf.PinSensor, "pin number for sensor")
+	pf.IntVarP(&Conf.PinSensor, "pin-sensor", "S", Conf.PinSensor, "pin number for sensor")
 
 	pimonCmd.AddCommand(VersionCmd)
 }
