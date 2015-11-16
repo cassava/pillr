@@ -5,145 +5,175 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"os"
-	"os/signal"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	log "github.com/Sirupsen/logrus"
 	"github.com/cassava/pillr/guitar"
 	"github.com/cassava/pillr/led"
-	"github.com/d2r2/go-dht"
-	"github.com/kidoman/embd"
-	_ "github.com/kidoman/embd/host/rpi"
+	"github.com/goulash/xdg"
+	"github.com/spf13/cobra"
 )
 
-var (
-	// If conserve is true, we should (can) set interval to 0.
-	conserve = flag.Bool("conserve", true, "only store entries that differ from the previous")
-	pinnr    = flag.Int("led", -1, "gpio pin number of LED")
-	dhtnr    = flag.Int("dht", -1, "gpio pin number of DHT22 sensor")
-	mondb    = flag.String("output", "pimon.csv", "file to write data to")
-	interval = flag.Duration("interval", 2*time.Second, "minimum time between measurements")
+const (
+	configEnv      = "PIMON_CONFIG"
+	configSuffix   = "pimon/conf.toml"
+	databaseSuffix = "pimon/measurements.dat"
+	lockSuffix     = "pimon/lock.pid"
 )
 
-func listen(pin int, ch chan<- Measurement, done <-chan struct{}) {
-	read := func() (m Measurement) {
-		before := time.Now()
-		after := before
-		for after.Sub(before) <= *interval {
-			t, h, r, err := dht.ReadDHTxxWithRetry(dht.DHT22, pin, false, 10)
-			if err != nil {
-				log.WithFields(log.Fields{"retries": r}).Errorf("DHT22: %s", err)
-				continue
-			}
-			log.WithFields(log.Fields{"retries": r}).Debugf("DHT22: temp=%v humidity=%v", t, h)
+type Configuration struct {
+	// Listen defines what port we should listen to for online access.
+	// If left empty, online access is disabled.
+	Listen string `toml:"listen"`
 
-			after = time.Now()
-			m = Measurement{after.Unix(), t, h}
-		}
-		return
-	}
+	// Conserve defines if we only store entries that differ from previous entries.
+	Conserve bool `toml:"conserve"`
 
-outer:
-	for {
-		select {
-		case <-done:
-			break outer
-		case ch <- read():
-			continue
-		}
-	}
+	// Interval defines the minimum time between measurements.
+	Interval time.Duration `toml:"interval"`
 
-	close(ch)
+	PinWarningLED   int `toml:"pin_warning_led"`
+	PinHeartbeatLED int `toml:"pin_heartbeat_led"`
+	PinSensor       int `toml:"pin_sensor"`
+
+	Patterns PatternConfiguration `toml:"patterns"`
 }
 
-type NotifyLED struct {
-	LED    *led.LED
-	Threat guitar.Danger
+type PatternConfiguration struct {
+	Low      []time.Duration `toml:"low"`
+	Moderate []time.Duration `toml:"moderate"`
+	Elevated []time.Duration `toml:"elevated"`
+	High     []time.Duration `toml:"high"`
+	Severe   []time.Duration `toml:"severe"`
+	Extreme  []time.Duration `toml:"extreme"`
 }
 
-func (nl *NotifyLED) Update(d guitar.Danger) {
-	if nl.Threat == d {
-		return
-	}
-	nl.Threat = d
-
+func (pc PatternConfiguration) Get(d guitar.Danger) []time.Duration {
 	switch d {
 	case guitar.Low:
-		nl.LED.Stop()
+		return pc.Low
 	case guitar.Moderate:
-		nl.LED.Blink(led.Moderate...)
+		return pc.Moderate
 	case guitar.Elevated:
-		nl.LED.Blink(led.Elevated...)
+		return pc.Elevated
 	case guitar.High:
-		nl.LED.Blink(led.High...)
+		return pc.High
 	case guitar.Severe:
-		nl.LED.Blink(led.Severe...)
+		return pc.Severe
 	case guitar.Extreme:
-		nl.LED.Blink(led.Extreme...)
+		return pc.Extreme
 	default:
 		log.Error("Unknown danger level received.")
+		return nil
 	}
+}
+
+func (c Configuration) Assert() {
+	if c.PinWarningLED <= 0 {
+		log.Fatal("warning LED pin unspecified")
+	}
+	if c.PinSensor <= 0 {
+		log.Fatal("sensor pin unspecified")
+	}
+	if c.Interval < 0 {
+		log.Fatal("measurment interval is invalid")
+	}
+}
+
+var Conf = &Configuration{
+	Listen:   ":8080",
+	Conserve: false,
+	Interval: 10 * time.Second,
+
+	Patterns: PatternConfiguration{
+		Low:      []time.Duration{0},
+		Moderate: led.Moderate,
+		Elevated: led.Elevated,
+		High:     led.High,
+		Severe:   led.Severe,
+		Extreme:  led.Extreme,
+	},
+}
+
+var (
+	database string
+	conf     string
+)
+
+var pimonCmd = &cobra.Command{
+	Use:   "pimon",
+	Short: "monitor temperature and humidity",
+	Long: `Pimon monitors the temperature and humidity and warns you
+if if is not in the safe range defined by Larrivee.
+
+  If pimon is run with default options and without any specific command,
+  it will read all the configuration files it finds in the XDG config path.
+  It will also store any measurements in XDG_DATA_HOME/pimon/th.csv.
+`,
+	Run: func(cmd *cobra.Command, args []string) {
+		Conf.Assert()
+
+		exitIf(pimonLock())
+		defer pimonUnlock()
+
+		Run()
+	},
+}
+
+func pimonInit() {
+	pf := pimonCmd.PersistentFlags()
+	pf.StringVar(&database, "database", "", "read from and store measurements in this file")
+	pf.StringVar(&Conf.Listen, "listen", Conf.Listen, "enable online access at this port")
+	pf.BoolVarP(&Conf.Conserve, "conserve", "c", Conf.Conserve, "only store differing entries")
+	pf.DurationVarP(&Conf.Interval, "interval", "i", Conf.Interval, "minimum time between measurements")
+	pf.IntVarP(&Conf.PinWarningLED, "pin-warning", "W", Conf.PinWarningLED, "pin number for warning LED")
+	pf.IntVarP(&Conf.PinHeartbeatLED, "pin-heartbeat", "H", Conf.PinHeartbeatLED, "pin number for system LED")
+	pf.IntVarP(&Conf.PinSensor, "pin-warning", "S", Conf.PinSensor, "pin number for sensor")
+
+	pimonCmd.AddCommand(VersionCmd)
+}
+
+func mergeConf() {
+	merge := func(file string) {
+		_, err := toml.DecodeFile(file, &Conf)
+		if err != nil {
+			log.Errorf("error reading configuration file %v: %v", file, err)
+		}
+	}
+
+	cp := os.Getenv(configEnv)
+	if cp != "" {
+		merge(cp)
+		return
+	}
+	xdg.MergeConfigR(configSuffix, func(file string) error { merge(file); return nil })
+}
+
+func pimonLock() error {
+	if xdg.FindRuntime(lockSuffix) != "" {
+		return fmt.Errorf("pimon lock file already exists: %s", xdg.UserRuntime(lockSuffix))
+	}
+
+	f, err := xdg.OpenRuntime(lockSuffix, os.O_EXCL|os.O_CREATE|os.O_WRONLY)
+	if err != nil {
+		return fmt.Errorf("cannot create pimon lock file: %v", err)
+	}
+	fmt.Fprintln(f, os.Getpid())
+	f.Close()
+	return nil
+}
+
+func pimonUnlock() {
+	_ = os.Remove(xdg.UserRuntime(lockSuffix))
 }
 
 func main() {
-	flag.Parse()
-
-	if *pinnr < 0 {
-		log.Fatal("LED pin unspecified")
-	}
-	if *dhtnr < 0 {
-		log.Fatal("DHT22 pin unspecified")
-	}
-	if *interval < 0 {
-		*interval = 0
-	}
-
-	exitIf(embd.InitGPIO())
-	defer embd.CloseGPIO()
-
-	ch := make(chan Measurement, 1)
-	done := make(chan struct{})
-	go listen(*dhtnr, ch, done)
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
-	nl := &NotifyLED{led.New(*pinnr), guitar.Low}
-	m, err := NewMonitor(*mondb, 0.1)
-	if err != nil {
-		log.Fatal(err)
-	}
-	g := guitar.Larrivee
-outer:
-	for {
-		select {
-		case <-c:
-			log.Info("Exiting...")
-			break outer
-		case x := <-ch:
-			m.Update(x)
-			d := g.Threat(x.Humidity)
-			nl.Update(d)
-			log.WithFields(log.Fields{
-				"danger": d.String(),
-			}).Info(x)
-		}
-	}
-
-	// Signal listener that it should close.
-	close(done)
-	m.Close()
-
-	go func() {
-		// This we do in case l.Stop() doesn't work.
-		// It's a way to force quit.
-		<-c
-		log.Error("Forcing exit.")
-		os.Exit(1)
-	}()
-	nl.LED.Stop()
+	mergeConf()
+	pimonInit()
+	pimonCmd.Execute()
 }
 
 func exitIf(err error) {
