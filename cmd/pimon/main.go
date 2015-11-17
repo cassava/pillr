@@ -133,8 +133,13 @@ if if is not in the safe range defined by Larrivee.
 		csv, err := NewCSVPersister(xdg.UserData(databaseSuffix))
 		if err != nil {
 			log.Error("error persisting: ", err)
+			return
 		}
-		m, _ := NewMonitor(csv, 0.1)
+		m, err := NewMonitor(csv, 0.1)
+		if err != nil {
+			log.Error("error reading persistent file: ", err)
+			return
+		}
 		g := guitar.Larrivee
 
 		go Serve(Conf.Listen, m)

@@ -7,7 +7,7 @@ package main
 import "sync"
 
 type Monitor struct {
-	*sync.RWMutex
+	sync.RWMutex
 
 	belief Measurement
 	series Series
@@ -21,10 +21,9 @@ func NewMonitor(p Persister, lag float32) (*Monitor, error) {
 		return nil, err
 	}
 	return &Monitor{
-		RWMutex: &sync.RWMutex{},
-		lag:     lag,
-		p:       p,
-		series:  s,
+		lag:    lag,
+		p:      p,
+		series: s,
 	}, nil
 }
 
