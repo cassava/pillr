@@ -39,6 +39,7 @@ func WatchSensor(pin int, done <-chan struct{}, f func(Measurement)) {
 	read := func() {
 		before := time.Now()
 		after := time.Now()
+		var m Measurement
 		for after.Sub(before) <= Conf.Interval {
 			t, h, r, err := dht.ReadDHTxxWithRetry(dht.DHT22, pin, false, 10)
 			if err != nil {
@@ -48,12 +49,13 @@ func WatchSensor(pin int, done <-chan struct{}, f func(Measurement)) {
 			log.WithFields(log.Fields{"retries": r}).Debugf("DHT22: temp=%v humidity=%v", t, h)
 
 			after = time.Now()
-			ch <- Measurement{after.Unix(), t, h}
+			m = Measurement{after.Unix(), t, h}
 		}
+		ch <- m
 	}
 
-	go read()
 	for {
+		go read()
 		select {
 		case <-done:
 			return
