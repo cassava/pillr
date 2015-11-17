@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const measurementTimeFormat = "2006-01-02 15:04:05"
@@ -110,7 +112,11 @@ func (s Series) Marshal(w io.Writer, v url.Values) {
 	case "csv":
 		cw := csv.NewWriter(w)
 		for _, x := range s {
-			_ = cw.Write(x.Record())
+			err := cw.Write(x.Record())
+			if err != nil {
+				log.Errorln("marshalling series to csv: ", err)
+				break
+			}
 		}
 	case "json":
 		fallthrough
