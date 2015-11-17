@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const measurementTimeFormat = "2006-01-02 15:04:05"
+
 type Measurement struct {
 	UnixTime    int64
 	Temperature float32
@@ -31,7 +33,7 @@ func (x Measurement) String() string {
 }
 
 func (x Measurement) Record() []string {
-	return []string{time.Unix(x.UnixTime, 0).Format("2006-01-02 15:04:05"),
+	return []string{time.Unix(x.UnixTime, 0).Format(measurementTimeFormat),
 		strconv.FormatFloat(float64(x.Temperature), 'f', 1, 32),
 		strconv.FormatFloat(float64(x.Humidity), 'f', 1, 32),
 	}
@@ -42,11 +44,11 @@ func (m *Measurement) FromRecord(rs []string) error {
 		return errors.New("invalid record length")
 	}
 
-	var err error
-	m.UnixTime, err = strconv.ParseInt(rs[0], 10, 64)
+	t, err := time.Parse(measurementTimeFormat, rs[0])
 	if err != nil {
 		return err
 	}
+	m.UnixTime = t.Unix()
 	f, err := strconv.ParseFloat(rs[1], 32)
 	if err != nil {
 		return err
