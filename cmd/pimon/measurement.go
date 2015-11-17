@@ -5,8 +5,11 @@
 package main
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 	"strings"
@@ -37,6 +40,11 @@ func (x Measurement) Record() []string {
 		strconv.FormatFloat(float64(x.Temperature), 'f', 1, 32),
 		strconv.FormatFloat(float64(x.Humidity), 'f', 1, 32),
 	}
+}
+
+func (x Measurement) MarshalJSON() ([]byte, error) {
+	r := x.Record()
+	return []byte(fmt.Sprintf(`{"time": "%s", "temperature": %s, "humidity": %s}`, r[0], r[1], r[2])), nil
 }
 
 func (m *Measurement) FromRecord(rs []string) error {
@@ -70,10 +78,13 @@ func (x Measurement) Marshal(v url.Values) string {
 	case "string":
 		return x.String()
 	case "tabular":
-		fallthrough
-	default:
 		r := x.Record()
 		return fmt.Sprintf("time:        %s\ntemperature: %s\nhumidity:    %s", r[0], r[1], r[2])
+	case "json":
+		fallthrough
+	default:
+		s, _ := x.MarshalJSON()
+		return string(s)
 	}
 }
 
@@ -92,3 +103,19 @@ type Series []Measurement
 func (s *Series) Add(m Measurement) { *s = append(*s, m) }
 func (s Series) Len() int           { return len(s) }
 func (s Series) Top() Measurement   { return s[len(s)-1] }
+
+func (s Series) Marshal(w io.Writer, v url.Values) {
+	t := v.Get("type")
+	switch t {
+	case "csv":
+		cw := csv.NewWriter(w)
+		for _, x := range s {
+			_ = cw.Write(x.Record())
+		}
+	case "json":
+		fallthrough
+	default:
+		jw := json.NewEncoder(w)
+		jw.Encode(s)
+	}
+}

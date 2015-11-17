@@ -26,7 +26,13 @@ func serveLatest(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, s.Top().Marshal(r.URL.Query()))
 }
 
+func serveSeries(w http.ResponseWriter, r *http.Request) {
+	s := monitor.Series()
+	s.Marshal(w, r.URL.Query())
+}
+
 func init() {
+	http.HandleFunc("/series", serveSeries)
 	http.HandleFunc("/belief", serveBelief)
 	http.HandleFunc("/latest", serveLatest)
 }
