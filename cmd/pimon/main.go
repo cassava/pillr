@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -14,6 +15,8 @@ import (
 	"github.com/cassava/pillr/guitar"
 	"github.com/cassava/pillr/led"
 	"github.com/goulash/xdg"
+	"github.com/kidoman/embd"
+	_ "github.com/kidoman/embd/host/rpi"
 	"github.com/spf13/cobra"
 )
 
@@ -119,7 +122,35 @@ if if is not in the safe range defined by Larrivee.
 		exitIf(pimonLock())
 		defer pimonUnlock()
 
-		Run()
+		exitIf(embd.InitGPIO())
+		defer embd.CloseGPIO()
+
+		done := make(chan struct{})
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+
+		nl := &WarningLED{led.New(Conf.PinWarningLED), guitar.Low}
+		csv, err := NewCSVPersister(xdg.UserData(databaseSuffix))
+		if err != nil {
+			log.Error("error persisting: ", err)
+		}
+		m, _ := NewMonitor(csv, 0.1)
+		g := guitar.Larrivee
+
+		go Serve(Conf.Listen, m)
+		go WatchSensor(Conf.PinSensor, done, func(x Measurement) {
+			m.Update(x)
+			d := g.Threat(x.Humidity)
+			nl.Update(d)
+			log.WithFields(log.Fields{
+				"danger": d.String(),
+			}).Info(x)
+		})
+
+		<-c
+		close(done)
+		m.Close()
+		nl.LED.Stop()
 	},
 }
 

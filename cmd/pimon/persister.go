@@ -8,12 +8,18 @@ import (
 	"bufio"
 	"encoding/csv"
 	"encoding/gob"
+	"io"
 	"os"
 )
 
 type Persister interface {
+	ReadAll() (Series, error)
 	Persist(m Measurement) error
 	Close() error
+}
+
+func open(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 }
 
 type csvPersister struct {
@@ -23,7 +29,7 @@ type csvPersister struct {
 }
 
 func NewCSVPersister(path string) (*csvPersister, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +37,35 @@ func NewCSVPersister(path string) (*csvPersister, error) {
 	buf := bufio.NewWriter(file)
 	w := csv.NewWriter(buf)
 	return &csvPersister{file, buf, w}, nil
+}
+
+func (p *csvPersister) ReadAll() (Series, error) {
+	_, err := p.file.Seek(0, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	defer p.file.Seek(0, 2)
+	r := csv.NewReader(p.file)
+	var s Series
+	for {
+		var rs []string
+		rs, err = r.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		var x Measurement
+		err = x.FromRecord(rs)
+		if err != nil {
+			return nil, err
+		}
+		s.Add(x)
+	}
+	return s, nil
 }
 
 func (p *csvPersister) Persist(m Measurement) error {
@@ -58,7 +93,7 @@ func (p *gobPersister) Close() error {
 }
 
 func NewGobPersister(path string) (*gobPersister, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := open(path)
 	if err != nil {
 		return nil, err
 	}

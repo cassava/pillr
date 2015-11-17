@@ -16,10 +16,15 @@ type Monitor struct {
 }
 
 func NewMonitor(p Persister, lag float32) (*Monitor, error) {
+	s, err := p.ReadAll()
+	if err != nil {
+		return nil, err
+	}
 	return &Monitor{
 		RWMutex: &sync.RWMutex{},
 		lag:     lag,
 		p:       p,
+		series:  s,
 	}, nil
 }
 

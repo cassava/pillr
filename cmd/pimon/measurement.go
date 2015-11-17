@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -36,6 +37,29 @@ func (x Measurement) Record() []string {
 	}
 }
 
+func (m *Measurement) FromRecord(rs []string) error {
+	if len(rs) != 3 {
+		return errors.New("invalid record length")
+	}
+
+	var err error
+	m.UnixTime, err = strconv.ParseInt(rs[0], 10, 64)
+	if err != nil {
+		return err
+	}
+	f, err := strconv.ParseFloat(rs[1], 32)
+	if err != nil {
+		return err
+	}
+	m.Temperature = float32(f)
+	f, err = strconv.ParseFloat(rs[2], 32)
+	if err != nil {
+		return err
+	}
+	m.Humidity = float32(f)
+	return nil
+}
+
 func (x Measurement) Marshal(v url.Values) string {
 	t := v.Get("type")
 	switch t {
@@ -47,7 +71,7 @@ func (x Measurement) Marshal(v url.Values) string {
 		fallthrough
 	default:
 		r := x.Record()
-		return fmt.Sprintf(`time:        %s\ntemperature: %s\nhumidity:    %s`, r[0], r[1], r[2])
+		return fmt.Sprintf("time:        %s\ntemperature: %s\nhumidity:    %s", r[0], r[1], r[2])
 	}
 }
 

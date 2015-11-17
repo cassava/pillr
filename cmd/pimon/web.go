@@ -33,5 +33,8 @@ func init() {
 
 func Serve(listen string, m *Monitor) {
 	monitor = m
-	log.Fatal(http.ListenAndServe(listen, nil))
+	err := http.ListenAndServe(listen, nil)
+	if err != nil {
+		log.Errorln(err)
+	}
 }
