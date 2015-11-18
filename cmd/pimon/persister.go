@@ -24,7 +24,6 @@ func open(path string) (*os.File, error) {
 
 type csvPersister struct {
 	file *os.File
-	buf  *bufio.Writer
 	w    *csv.Writer
 }
 
@@ -34,9 +33,8 @@ func NewCSVPersister(path string) (*csvPersister, error) {
 		return nil, err
 	}
 
-	buf := bufio.NewWriter(file)
-	w := csv.NewWriter(buf)
-	return &csvPersister{file, buf, w}, nil
+	w := csv.NewWriter(file)
+	return &csvPersister{file, w}, nil
 }
 
 func (p *csvPersister) ReadAll() (Series, error) {
@@ -73,7 +71,7 @@ func (p *csvPersister) Persist(m Measurement) error {
 }
 
 func (p *csvPersister) Close() error {
-	p.buf.Flush()
+	p.w.Flush()
 	return p.file.Close()
 }
 
