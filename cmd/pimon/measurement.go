@@ -118,6 +118,7 @@ func (s Series) Marshal(w io.Writer, v url.Values) {
 				break
 			}
 		}
+		cw.Flush()
 	case "json":
 		fallthrough
 	default:
